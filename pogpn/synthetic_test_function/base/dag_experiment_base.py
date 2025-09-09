@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple
 import torch
 from botorch.utils.transforms import unnormalize
 
-from ...pogpn.utils import convert_tensor_to_dict
+from ...utils import convert_tensor_to_dict
 from botorch.test_functions.synthetic import SyntheticTestFunction
 
 
