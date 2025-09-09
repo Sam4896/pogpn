@@ -1,0 +1,35 @@
+*.pyc
+/.vscode/
+/.venv
+/.vscode
+/.pytest_cache/
+/test_venv/
+/build/
+/dist/
+.idea/dataSources.xml
+.idea/misc.xml
+.idea/modules.xml
+.idea/workspace.xml
+.idea/inspectionProfiles/profiles_settings.xml
+.vscode/settings.json
+
+/experiments/penicilinSim/sim_env/csvExports/*
+/experiments/penicilinSim/sim_env/combinedDf
+
+.idea/podgp-multi-stage.iml
+.idea/misc.xml
+
+*.lock
+
+# MLflow local tracking
+*.db
+mlruns/
+mlflow.db
+mlflow.db-journal
+
+# Large experiment artifacts (use DVC instead)
+experiments/*/mlruns/
+experiments/bayesian_optimization/ackley/analysis/pogpn_analysis/results/
+
+# GitLab MLflow credentials (security)
+gitlab_mlflow.yaml

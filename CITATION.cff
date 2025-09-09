@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+title: "POGPN: Partially Observable Gaussian Process Networks"
+message: "If you use this package, please cite it as below and also cite the related paper."
+authors:
+  - family-names: Kiroriwal
+    given-names: Saksham
+version: "0.0.1"
+date-released: "2025-01-01"
+repository-code: "https://github.com/Sam4896/pogpn"
+preferred-citation:
+  type: software
+  title: "POGPN: Partially Observable Gaussian Process Networks"
+  version: "0.0.1"
+  authors:
+    - family-names: Kiroriwal
+      given-names: Saksham
+references:
+  - type: article
+    title: "Partially Observable Gaussian Process Network and Doubly Stochastic Variational Inference"
+    authors:
+      - family-names: "Kiroriwal"
+        given-names: "Saksham"
+      - family-names: "Pfrommer"
+        given-names: "Julius"
+      - family-names: "Beyerer"
+        given-names: "Jürgen"
+    journal: "arXiv preprint"
+    year: "2025"
+    doi: "10.48550/arXiv.2502.13905"
+    url: "https://arxiv.org/abs/2502.13905"
