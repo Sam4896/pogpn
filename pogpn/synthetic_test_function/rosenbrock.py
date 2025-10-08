@@ -51,13 +51,13 @@ class Rosenbrock(DAGSyntheticTestFunction):
         y1 = torch.sum((a - x).pow(2), dim=-1)
 
         if self.is_stochastic:
-            part1 = y1 + torch.randn_like(y1) * self.process_stochasticity_std
+            part1 = self._add_proportional_noise(y1, self.process_stochasticity_std)
         else:
             part1 = y1
 
         y2 = torch.sum(b * (x[..., 1:] - x[..., :-1].pow(2)).pow(2), dim=-1)
         if self.is_stochastic:
-            part2 = y2 + torch.randn_like(y2) * self.process_stochasticity_std
+            part2 = self._add_proportional_noise(y2, self.process_stochasticity_std)
         else:
             part2 = y2
 
@@ -70,7 +70,7 @@ class Rosenbrock(DAGSyntheticTestFunction):
         """Evaluate the noisy function (process noise + observation noise)."""
         output = self._evaluate_true(input_dict)
         for key in ["y1", "y2", "y3"]:
-            output[key] = (
-                output[key] + torch.randn_like(output[key]) * self.observation_noise_std
+            output[key] = self._add_proportional_noise(
+                output[key], self.observation_noise_std
             )
         return output

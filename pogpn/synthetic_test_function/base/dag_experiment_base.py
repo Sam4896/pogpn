@@ -87,6 +87,24 @@ class DAGSyntheticTestFunction(SyntheticTestFunction, ABC):
             output = output.unsqueeze(-1)
         return output
 
+    def _add_proportional_noise(
+        self, signal: torch.Tensor, std: Optional[float]
+    ) -> torch.Tensor:
+        """Add noise proportional to the signal magnitude.
+
+        Args:
+            signal: The tensor to add noise to.
+            std: The standard deviation of the noise, scaled by the signal.
+                 If None or 0.0, no noise is added.
+
+        Returns:
+            The noisy tensor.
+
+        """
+        if std is not None and std > 0:
+            return signal + torch.abs(signal) * torch.randn_like(signal) * std
+        return signal
+
     @abstractmethod
     def _evaluate_true(
         self, input_dict: Dict[str, torch.Tensor]

@@ -47,7 +47,7 @@ class _ApproximateMarginalLogLikelihoodCustom(MarginalLogLikelihood, ABC):
 
 
 class POGPNPathwiseMLL(_ApproximateMarginalLogLikelihoodCustom):  # noqa: D101
-    def __init__(self, likelihood, model, node_output_size_normalization: bool = True):
+    def __init__(self, likelihood, model, node_output_size_normalization: bool = False):
         """Initialize the POGPNPathwiseVariationalELBO."""
         super().__init__(likelihood, model)
         self.node_mlls_dict = model.node_mlls_dict

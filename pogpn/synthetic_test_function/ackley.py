@@ -47,23 +47,20 @@ class Ackley(DAGSyntheticTestFunction):
         """Evaluate the true function (no noise)."""
         a, b, c = self.a, self.b, self.c
         x = input_dict["x"]
-        y1 = -b / math.sqrt(self.dim) * torch.linalg.norm(x, dim=-1)
+        y1_out = -b / math.sqrt(self.dim) * torch.linalg.norm(x, dim=-1)
 
+        y1 = -a * torch.exp(y1_out)
         if self.is_stochastic:
-            part1 = (
-                -a * torch.exp(y1)
-                + torch.randn_like(y1) * self.process_stochasticity_std
-            )
+            part1 = self._add_proportional_noise(y1, self.process_stochasticity_std)
         else:
-            part1 = -a * torch.exp(y1)
+            part1 = y1
 
-        y2 = torch.mean(torch.cos(c * x), dim=-1)
+        y2_out = torch.mean(torch.cos(c * x), dim=-1)
+        y2 = -torch.exp(y2_out)
         if self.is_stochastic:
-            part2 = (
-                -torch.exp(y2) + torch.randn_like(y2) * self.process_stochasticity_std
-            )
+            part2 = self._add_proportional_noise(y2, self.process_stochasticity_std)
         else:
-            part2 = -torch.exp(y2)
+            part2 = y2
 
         y3 = part1 + part2 + a + math.e
         return {"y1": part1, "y2": part2, "y3": y3}
@@ -74,7 +71,7 @@ class Ackley(DAGSyntheticTestFunction):
         """Evaluate the noisy function (process noise + observation noise)."""
         output = self._evaluate_true(input_dict)
         for key in ["y1", "y2", "y3"]:
-            output[key] = (
-                output[key] + torch.randn_like(output[key]) * self.observation_noise_std
+            output[key] = self._add_proportional_noise(
+                output[key], self.observation_noise_std
             )
         return output

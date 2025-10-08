@@ -62,7 +62,7 @@ class Levy(DAGSyntheticTestFunction):
         w3 = 1 + (x3 - 1) / 4  # Shape: N x 1
 
         # y1: term associated with w₁ (first dimension)
-        y1 = torch.sin(math.pi * w1) ** 2  # Shape: N x 1
+        y1_base = torch.sin(math.pi * w1) ** 2  # Shape: N x 1
 
         # y2: summation term for w₁ to w_{d-1}
         sum_term_w1 = (w1 - 1) ** 2 * (1 + 10 * torch.sin(math.pi * w1 + 1) ** 2)
@@ -71,23 +71,27 @@ class Levy(DAGSyntheticTestFunction):
             dim=-1,
             keepdim=True,
         )  # Shape: N x 1
-        y2 = sum_term_w1 + sum_term_w2
+        y2_base = sum_term_w1 + sum_term_w2
 
         # y3: term associated with w_d (last dimension)
-        y3 = (w3 - 1) ** 2 * (1 + torch.sin(2 * math.pi * w3) ** 2)  # Shape: N x 1
+        y3_base = (w3 - 1) ** 2 * (1 + torch.sin(2 * math.pi * w3) ** 2)  # Shape: N x 1
 
         # Add process noise to intermediate outputs if stochastic
         if self.is_stochastic:
-            y1 = y1 + torch.randn_like(y1) * self.process_stochasticity_std
-            y2 = y2 + torch.randn_like(y2) * self.process_stochasticity_std
-            y3 = y3 + torch.randn_like(y3) * self.process_stochasticity_std
+            y1 = self._add_proportional_noise(y1_base, self.process_stochasticity_std)
+            y2 = self._add_proportional_noise(y2_base, self.process_stochasticity_std)
+            y3 = self._add_proportional_noise(y3_base, self.process_stochasticity_std)
+        else:
+            y1, y2, y3 = y1_base, y2_base, y3_base
 
         # y4: final output - sum of all terms (using potentially stochastic y1, y2, y3)
-        y4 = y1 + y2 + y3  # Shape: N x 1
+        y4_base = y1 + y2 + y3  # Shape: N x 1
 
         # Add process noise to final output if stochastic
         if self.is_stochastic:
-            y4 = y4 + torch.randn_like(y4) * self.process_stochasticity_std
+            y4 = self._add_proportional_noise(y4_base, self.process_stochasticity_std)
+        else:
+            y4 = y4_base
 
         return {"y1": y1, "y2": y2, "y3": y3, "y4": y4}
 
@@ -100,9 +104,8 @@ class Levy(DAGSyntheticTestFunction):
         # Add observation noise
         if self.observation_noise_std is not None:
             for key in ["y1", "y2", "y3", "y4"]:
-                output[key] = (
-                    output[key]
-                    + torch.randn_like(output[key]) * self.observation_noise_std
+                output[key] = self._add_proportional_noise(
+                    output[key], self.observation_noise_std
                 )
 
         return output

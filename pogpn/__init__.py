@@ -1,5 +1,3 @@
-__version__ = "0.0.1"
-
 # Core POGPN functionality
 from .pogpn_nodewise import POGPNNodewise
 from .pogpn_pathwise import POGPNPathwise

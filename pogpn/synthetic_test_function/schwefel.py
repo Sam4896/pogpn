@@ -44,18 +44,24 @@ class Schwefel(DAGSyntheticTestFunction):
         x = input_dict["x"]  # Shape: N x D
 
         # y1: vector of x_i * sin(sqrt(|x_i|)) for each dimension
-        y1 = x * torch.sin(torch.sqrt(torch.abs(x)))  # Shape: N x D
+        y1_base = x * torch.sin(torch.sqrt(torch.abs(x)))  # Shape: N x D
 
         # Add process noise to intermediate output if stochastic
         if self.is_stochastic:
-            y1 = y1 + torch.randn_like(y1) * self.process_stochasticity_std
+            y1 = self._add_proportional_noise(y1_base, self.process_stochasticity_std)
+        else:
+            y1 = y1_base
 
         # y2: final output - sum over all dimensions (using potentially stochastic y1)
-        y2 = self.a * self.dim - torch.sum(y1, dim=-1, keepdim=True)  # Shape: N x 1
+        y2_base = self.a * self.dim - torch.sum(
+            y1, dim=-1, keepdim=True
+        )  # Shape: N x 1
 
         # Add process noise to intermediate outputs if stochastic
         if self.is_stochastic:
-            y2 = y2 + torch.randn_like(y2) * self.process_stochasticity_std
+            y2 = self._add_proportional_noise(y2_base, self.process_stochasticity_std)
+        else:
+            y2 = y2_base
 
         return {"y1": y1, "y2": y2}
 
@@ -67,13 +73,11 @@ class Schwefel(DAGSyntheticTestFunction):
 
         # Add observation noise
         if self.observation_noise_std is not None:
-            output["y1"] = (
-                output["y1"]
-                + torch.randn_like(output["y1"]) * self.observation_noise_std
+            output["y1"] = self._add_proportional_noise(
+                output["y1"], self.observation_noise_std
             )
-            output["y2"] = (
-                output["y2"]
-                + torch.randn_like(output["y2"]) * self.observation_noise_std
+            output["y2"] = self._add_proportional_noise(
+                output["y2"], self.observation_noise_std
             )
 
         return output

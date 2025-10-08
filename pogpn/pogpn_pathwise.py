@@ -225,4 +225,3 @@ class POGPNPathwise(POGPNBase):
             node_output_size_normalization=node_output_size_normalization,
         ).to(self.device, self.dtype)
         fit_custom_torch(mll, loss_history, lr=lr, maxiter=maxiter)
-        # fit_custom_plateau(mll, loss_history=loss_history, lr=lr, maxiter=maxiter)

@@ -43,27 +43,32 @@ class Griewank(DAGSyntheticTestFunction):
         x = input_dict["x"]  # Shape: N x D
 
         # y1: summation term sum_{i=1}^{d} (x_i^2 / 4000)
-        y1 = torch.sum(x**2 / 4000, dim=-1, keepdim=True)  # Shape: N x 1
+        y1_base = torch.sum(x**2 / 4000, dim=-1, keepdim=True)  # Shape: N x 1
 
         # y2: product term prod_{i=1}^{d} cos(x_i / sqrt(i))
         # Create sqrt(i) for each dimension
         sqrt_indices = torch.sqrt(
             torch.arange(1, self.dim + 1, dtype=x.dtype, device=x.device)
         )
-        y2 = torch.prod(
+        y2_base = torch.prod(
             torch.cos(x / sqrt_indices), dim=-1, keepdim=True
         )  # Shape: N x 1
 
         if self.is_stochastic:
-            y1 = y1 + torch.randn_like(y1) * self.process_stochasticity_std
-            y2 = y2 + torch.randn_like(y2) * self.process_stochasticity_std
+            y1 = self._add_proportional_noise(y1_base, self.process_stochasticity_std)
+            y2 = self._add_proportional_noise(y2_base, self.process_stochasticity_std)
+        else:
+            y1 = y1_base
+            y2 = y2_base
 
         # y3: final output 1 + y1 - y2 (using potentially stochastic y1, y2)
-        y3 = 1 + y1 - y2  # Shape: N x 1
+        y3_base = 1 + y1 - y2  # Shape: N x 1
 
         # Add process noise to intermediate outputs if stochastic
         if self.is_stochastic:
-            y3 = y3 + torch.randn_like(y3) * self.process_stochasticity_std
+            y3 = self._add_proportional_noise(y3_base, self.process_stochasticity_std)
+        else:
+            y3 = y3_base
 
         return {"y1": y1, "y2": y2, "y3": y3}
 
@@ -75,17 +80,14 @@ class Griewank(DAGSyntheticTestFunction):
 
         # Add observation noise
         if self.observation_noise_std is not None:
-            output["y1"] = (
-                output["y1"]
-                + torch.randn_like(output["y1"]) * self.observation_noise_std
+            output["y1"] = self._add_proportional_noise(
+                output["y1"], self.observation_noise_std
             )
-            output["y2"] = (
-                output["y2"]
-                + torch.randn_like(output["y2"]) * self.observation_noise_std
+            output["y2"] = self._add_proportional_noise(
+                output["y2"], self.observation_noise_std
             )
-            output["y3"] = (
-                output["y3"]
-                + torch.randn_like(output["y3"]) * self.observation_noise_std
+            output["y3"] = self._add_proportional_noise(
+                output["y3"], self.observation_noise_std
             )
 
         return output

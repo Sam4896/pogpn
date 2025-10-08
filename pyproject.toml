@@ -1,6 +1,6 @@
 [project]
 name = "pogpn"
-version = "0.0.1"
+version = "0.0.2"
 description = "Partially Observable Gaussian Process Network for multi-stage BO."
 readme = "README.md"
 license = {text = "MIT"}
@@ -35,7 +35,7 @@ dependencies = [
   "torch",
   "torchinfo>=1.8.0",
   "pynml>=1.1.1",
-  "pynvml>=12.0.0",
+  "nvidia-ml-py",
 ]
 
 [project.urls]
@@ -69,13 +69,17 @@ include = [
   { path = "CITATION.cff", format = "sdist" }
 ]
 
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.2"
+ipykernel = "^6.30.1"
+
 [build-system]
 requires = ["poetry-core", "cython", "setuptools"]
 build-backend = "poetry.core.masonry.api"
 
 [[tool.poetry.source]]
 name = "pytorch"
-url = "https://download.pytorch.org/whl/cu126"
+url = "https://download.pytorch.org/whl/cu128"
 priority = "supplemental"
 
 [tool.ruff]

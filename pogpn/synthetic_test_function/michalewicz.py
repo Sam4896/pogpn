@@ -59,18 +59,22 @@ class Michalewicz(DAGSyntheticTestFunction):
         x = input_dict["x"]
         dim_arr = torch.arange(1, self.dim + 1, 1, device=x.device, dtype=x.dtype)
 
-        y1 = torch.sin(x)
+        y1_base = torch.sin(x)
 
         if self.is_stochastic:
-            part1 = y1 + torch.randn_like(y1) * self.process_stochasticity_std
+            part1 = self._add_proportional_noise(
+                y1_base, self.process_stochasticity_std
+            )
         else:
-            part1 = y1
+            part1 = y1_base
 
-        y2 = torch.sin(dim_arr * x.pow(2) / torch.pi).pow(2 * self.m)
+        y2_base = torch.sin(dim_arr * x.pow(2) / torch.pi).pow(2 * self.m)
         if self.is_stochastic:
-            part2 = y2 + torch.randn_like(y2) * self.process_stochasticity_std
+            part2 = self._add_proportional_noise(
+                y2_base, self.process_stochasticity_std
+            )
         else:
-            part2 = y2
+            part2 = y2_base
 
         y3 = -torch.sum(part1 * part2, dim=-1)
         return {"y1": part1, "y2": part2, "y3": y3}
@@ -81,7 +85,7 @@ class Michalewicz(DAGSyntheticTestFunction):
         """Evaluate the noisy function (process noise + observation noise)."""
         output = self._evaluate_true(input_dict)
         for key in ["y1", "y2", "y3"]:
-            output[key] = (
-                output[key] + torch.randn_like(output[key]) * self.observation_noise_std
+            output[key] = self._add_proportional_noise(
+                output[key], self.observation_noise_std
             )
         return output

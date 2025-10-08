@@ -132,3 +132,17 @@ BoTorch:
 ```
 
 See `CITATION.cff` for citation metadata and `THIRD_PARTY_LICENSES.md` for third‑party licenses.
+
+## Versioning and Changelog
+
+This project follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`).
+
+- **`MAJOR`**: For incompatible API changes.
+- **`MINOR`**: For adding functionality in a backward-compatible manner.
+- **`PATCH`**: For backward-compatible bug fixes.
+
+When releasing a new version, please manually update the `version` in `pyproject.toml` and add a corresponding entry to the `CHANGELOG.md` file.
+
+### Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes between versions.
