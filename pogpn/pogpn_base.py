@@ -10,7 +10,7 @@ from torch import Tensor
 from botorch.sampling.normal import SobolQMCNormalSampler
 from .dag import DAG, RegressionNode, RootNode
 import logging
-from .utils import convert_tensor_to_dict
+from .utils import convert_dict_to_tensor, convert_tensor_to_dict
 from gpytorch.models import GP
 from botorch.acquisition.objective import PosteriorTransform
 from .pogpn_posterior import POGPNPosterior
@@ -75,16 +75,83 @@ class _POGPNModelDict(GP):
                     f"Node {node_name} is not a RegressionNode. Please provide a MarginalLogLikelihood for all non-root nodes."
                 )
 
-    def forward(self, X: Tensor):  # noqa: N803
+    def _eval_shallow_node(
+        self,
+        node_name: str,
+        node_model: Model,
+        node_sampler,
+        root_input_dict: Dict[str, Tensor],
+        samples_for_child_nodes_dict: Dict[str, Tensor],
+        latent_mvn_at_node_dict: Dict[str, Union[Tensor, Distribution, LinearOperator]],
+    ) -> None:
+        parent_observations: List[Tensor] = []
+        for parent_node_name in self.node_parents_dict[node_name]:
+            parent_observations.append(root_input_dict[parent_node_name])
+        train_X_node: Tensor = torch.cat(parent_observations, dim=-1)
+        latent_mvn_at_node_dict[node_name] = node_model(train_X_node)
+        samples_for_child_nodes_dict[node_name] = node_sampler(
+            GPyTorchPosterior(latent_mvn_at_node_dict[node_name])
+        )
+
+    def _eval_deep_node(
+        self,
+        node_name: str,
+        node_model: Model,
+        node_sampler,
+        root_input_dict: Dict[str, Tensor],
+        samples_for_child_nodes_dict: Dict[str, Tensor],
+        latent_mvn_at_node_dict: Dict[str, Union[Tensor, Distribution, LinearOperator]],
+    ) -> None:
+        parent_nodes = self.node_parents_dict[node_name]
+        parent_observations: List[Tensor] = []
+        node_output_dim = self.dag_nodes[node_name].node_output_dim
+        mc_samples = gpytorch.settings.num_likelihood_samples.value()
+
+        for parent_node_name in parent_nodes:
+            if parent_node_name in self.root_nodes:
+                obs = root_input_dict[parent_node_name].clone()
+                if node_output_dim > 1:
+                    aux_shape = [mc_samples, node_output_dim] + [1] * obs.ndim
+                    obs = obs.unsqueeze(-3).unsqueeze(-4).repeat(*aux_shape)
+                else:
+                    aux_shape = [mc_samples] + [1] * obs.ndim
+                    obs = obs.unsqueeze(-3).repeat(*aux_shape)
+                parent_observations.append(obs)
+            else:
+                parent_samples = samples_for_child_nodes_dict[parent_node_name]
+                if node_output_dim > 1:
+                    aux_shape = (
+                        [1] * (parent_samples.ndim - 2) + [node_output_dim] + [1] * 2
+                    )
+                    parent_samples = parent_samples.unsqueeze(-3).repeat(*aux_shape)
+                parent_observations.append(parent_samples)
+
+        train_X_node = torch.cat(parent_observations, dim=-1)
+        batached_latent_mvn = node_model(train_X_node)
+        if isinstance(
+            batached_latent_mvn,
+            gpytorch.distributions.MultitaskMultivariateNormal,
+        ):
+            consolidated = consolidate_mtmvn_mixture(batached_latent_mvn)
+        else:
+            consolidated = consolidate_mvn_mixture(batached_latent_mvn)
+        latent_mvn_at_node_dict[node_name] = consolidated
+        samples_for_child_nodes_dict[node_name] = node_sampler(  # type: ignore
+            GPyTorchPosterior(consolidated)
+        )
+
+    def forward(self, X: Tensor, **kwargs):  # noqa: N803
         """Forward pass of the POGPNPathwise model."""
         root_input_dict = convert_tensor_to_dict(
             X,
             self.root_node_indices_dict,
         )
-        samples_for_child_nodes_dict = {}
+        samples_for_child_nodes_dict: Dict[str, Tensor] = {}
         latent_mvn_at_node_dict: Dict[
             str, Union[Tensor, Distribution, LinearOperator]
         ] = {}
+
+        coordinate_descent_node = kwargs.get("coordinate_descent_node", None)
 
         for node_name in self.non_root_nodes:
             samples_for_child_nodes_dict[node_name] = torch.empty(
@@ -94,8 +161,8 @@ class _POGPNModelDict(GP):
                         self.num_observations,
                         self.dag_nodes[node_name].node_output_dim,
                     ]
-                )  # type: ignore
-            ).to(self.device, self.dtype)  # type: ignore
+                )
+            ).to(self.device, self.dtype)
 
         for node_name in self.dag.get_deterministic_topological_sort_subset(
             self.non_root_nodes
@@ -127,67 +194,28 @@ class _POGPNModelDict(GP):
                 )
 
             if node_name not in self.deep_nodes:
-                parent_observations = []
-
-                for parent_node_name in self.node_parents_dict[node_name]:
-                    parent_observations.append(root_input_dict[parent_node_name])
-
-                train_X_node: Tensor = torch.cat(parent_observations, dim=-1)  # noqa: N806
-                latent_mvn_at_node_dict[node_name] = node_model(train_X_node)
-
-                samples_for_child_nodes_dict[node_name] = node_sampler(
-                    GPyTorchPosterior(latent_mvn_at_node_dict[node_name])  # type: ignore
+                self._eval_shallow_node(
+                    node_name=node_name,
+                    node_model=node_model,
+                    node_sampler=node_sampler,
+                    root_input_dict=root_input_dict,
+                    samples_for_child_nodes_dict=samples_for_child_nodes_dict,
+                    latent_mvn_at_node_dict=latent_mvn_at_node_dict,
                 )
-
-            elif node_name in self.deep_nodes:
-                parent_nodes = self.node_parents_dict[node_name]
-                parent_observations = []
-                node_output_dim = self.dag_nodes[node_name].node_output_dim
-                mc_samples = gpytorch.settings.num_likelihood_samples.value()
-                for parent_node_name in parent_nodes:
-                    if parent_node_name in self.root_nodes:
-                        obs = root_input_dict[parent_node_name].clone()
-                        if node_output_dim > 1:
-                            aux_shape = [mc_samples, node_output_dim] + [1] * obs.ndim
-                            obs = obs.unsqueeze(-3).unsqueeze(-4).repeat(*aux_shape)
-                        else:
-                            aux_shape = [mc_samples] + [1] * obs.ndim
-                            obs = obs.unsqueeze(-3).repeat(*aux_shape)  # type: ignore
-                        parent_observations.append(obs)
-                    else:
-                        parent_samples = samples_for_child_nodes_dict[parent_node_name]
-                        if node_output_dim > 1:
-                            aux_shape = (
-                                [1] * (parent_samples.ndim - 2)
-                                + [node_output_dim]
-                                + [1] * 2
-                            )
-                            parent_samples = parent_samples.unsqueeze(-3).repeat(
-                                *aux_shape
-                            )
-                        parent_observations.append(parent_samples)
-
-                train_X_node = torch.cat(parent_observations, dim=-1)  # noqa: N806
-
-                batached_latent_mvn = node_model(train_X_node)
-
-                # latent_mvn_at_node_dict[node_name] = batached_latent_mvn
-
-                if isinstance(
-                    batached_latent_mvn,
-                    gpytorch.distributions.MultitaskMultivariateNormal,
-                ):
-                    latent_mvn_at_node_dict[node_name] = consolidate_mtmvn_mixture(
-                        batached_latent_mvn
-                    )
-                else:
-                    latent_mvn_at_node_dict[node_name] = consolidate_mvn_mixture(
-                        batached_latent_mvn
-                    )
-
-                samples_for_child_nodes_dict[node_name] = node_sampler(
-                    GPyTorchPosterior(latent_mvn_at_node_dict[node_name])  # type: ignore
+            else:
+                self._eval_deep_node(
+                    node_name=node_name,
+                    node_model=node_model,
+                    node_sampler=node_sampler,
+                    root_input_dict=root_input_dict,
+                    samples_for_child_nodes_dict=samples_for_child_nodes_dict,
+                    latent_mvn_at_node_dict=latent_mvn_at_node_dict,
                 )
+            if (
+                coordinate_descent_node is not None
+                and node_name == coordinate_descent_node
+            ):
+                break
 
         return latent_mvn_at_node_dict
 
@@ -380,6 +408,7 @@ class POGPNBase(Model):
                 This has been provided to be able to use GreedyImprovementReduction for the Inducing Points if needed.
             objective_node_name: The name of the node that is the objective.
             seed: The seed for the random number generator.
+            masks_dict: Dictionary of node names and their corresponding masks if there are missing observations.
 
         """
         super().__init__()
@@ -482,6 +511,19 @@ class POGPNBase(Model):
             dtype=self.dtype,
             masks_dict=self.masks_dict,
         )
+
+        self.model.train_inputs = [
+            convert_dict_to_tensor(
+                {node_name: data_dict[node_name] for node_name in self.root_nodes},
+                self.root_node_indices_dict,
+            )
+        ]
+
+        self.model.train_targets = {
+            node_name: data_dict[node_name].squeeze(-1)
+            for node_name in self.non_root_nodes
+            if node_name in data_dict.keys()
+        }
 
         # Store likelihood references without creating a ModuleDict to avoid recursive parameter counting
         self.likelihood = {

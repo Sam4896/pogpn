@@ -15,23 +15,51 @@ class _ApproximateMarginalLogLikelihoodCustom(MarginalLogLikelihood, ABC):
         super().__init__(likelihood, model)
 
     @abstractmethod
-    def _log_likelihood_term(self, approximate_dist_f, target, **kwargs):
+    def _log_likelihood_term(self, approximate_dist_f_dict, target_dict, **kwargs):
         """Log likelihood term."""
         raise NotImplementedError
 
-    def forward(self, approximate_dist_f, target, **kwargs):
-        """Forward pass."""
+    def forward(
+        self,
+        approximate_dist_f_dict: dict[str, Any],
+        target_dict: dict[str, Any],
+        **kwargs,
+    ):
+        """Forward pass.
+
+        Args:
+            approximate_dist_f_dict: Dictionary of approximate distributions for each node.
+            target_dict: Dictionary of target values for each node.
+            **kwargs: Additional keyword arguments.
+                coordinate_descent_node: Optional[str] = None,
+                This is the node to perform coordinate descent on. If None, all nodes are used to calculate the loss.
+
+        """
         loss = []
-        for node_name in self.node_mlls_dict.keys():
-            if node_name in target.keys():
+
+        if kwargs.get("coordinate_descent_node", None) is not None:
+            coordinate_descent_node = kwargs["coordinate_descent_node"]
+            if isinstance(coordinate_descent_node, str):
+                coordinate_descent_node = [coordinate_descent_node]
+            elif isinstance(coordinate_descent_node, (list, tuple, set)):
+                coordinate_descent_node = coordinate_descent_node
+            else:
+                raise ValueError(
+                    "coordinate_descent_node must be a string or list of strings"
+                )
+        else:
+            coordinate_descent_node = list(self.node_mlls_dict.keys())
+
+        for node_name in coordinate_descent_node:
+            if node_name in target_dict.keys():
                 loss_dict = self.node_mlls_dict[node_name](
-                    approximate_dist_f[node_name],
-                    target[node_name],
+                    approximate_dist_f_dict[node_name],
+                    target_dict[node_name],
                     self.node_output_size_dict[node_name],
                 )
             else:
                 loss_dict = self.node_mlls_dict[node_name](
-                    approximate_dist_f[node_name],
+                    approximate_dist_f_dict[node_name],
                     None,
                     self.node_output_size_dict[node_name],
                 )
@@ -62,13 +90,13 @@ class POGPNPathwiseMLL(_ApproximateMarginalLogLikelihoodCustom):  # noqa: D101
         else:
             self.node_output_size_dict = dict.fromkeys(self.node_mlls_dict.keys(), 1.0)
 
-    def _log_likelihood_term(self, variational_dist_f, target, **kwargs):
+    def _log_likelihood_term(self, variational_dist_f_dict, target_dict, **kwargs):
         """Log likelihood term."""
         pass
 
-    def forward(self, variational_dist_f_list: List[Any], target, **kwargs):
+    def forward(self, variational_dist_f_dict: List[Any], target_dict, **kwargs):
         """Forward pass."""
-        return super().forward(variational_dist_f_list, target, **kwargs)
+        return super().forward(variational_dist_f_dict, target_dict, **kwargs)
 
 
 class VariationalELBOCustom(_ApproximateMarginalLogLikelihood):

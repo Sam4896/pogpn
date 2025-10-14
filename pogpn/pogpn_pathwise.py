@@ -6,7 +6,7 @@ from .loss_closure_scipy import fit_custom_scipy
 from .loss_closure_torch import fit_custom_torch
 import logging
 from .pogpn_mll import POGPNPathwiseMLL
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, List, Tuple, Any, Callable
 from botorch.models.model import Model
 from gpytorch.mlls import MarginalLogLikelihood
 from .pogpn_mll import (
@@ -16,7 +16,6 @@ from .pogpn_mll import (
 )
 from botorch.models.utils.inducing_point_allocators import InducingPointAllocator
 from .custom_approximate_gp import BoTorchVariationalGP
-from .utils import convert_dict_to_tensor
 from .likelihood_prior import get_lognormal_likelihood_prior
 from botorch.models.transforms.outcome import OutcomeTransform
 from gpytorch.likelihoods import GaussianLikelihood, MultitaskGaussianLikelihood
@@ -139,7 +138,6 @@ class POGPNPathwise(POGPNBase):
 
     def fit(
         self,
-        data_dict: Dict[str, Tensor],
         optimizer: str,
         lr: float = 1e-2,
         maxiter: Optional[int] = None,
@@ -150,7 +148,6 @@ class POGPNPathwise(POGPNBase):
         """Train the POGPNPathwise model.
 
         Args:
-            data_dict: The data dictionary containing the training data for the model.
             optimizer: The optimizer to use for the training.
                 Can be "scipy" or "torch".
                 If scipy, then LBFGS is used.
@@ -165,27 +162,14 @@ class POGPNPathwise(POGPNBase):
             kwargs: Additional keyword arguments (currently unused).
 
         """
-        self.model.train_inputs = [
-            convert_dict_to_tensor(
-                {node_name: data_dict[node_name] for node_name in self.root_nodes},
-                self.root_node_indices_dict,
-            )
-        ]
-
-        self.model.train_targets = {
-            node_name: data_dict[node_name].squeeze(-1)
-            for node_name in self.non_root_nodes
-            if node_name in data_dict.keys()
-        }
-
         if optimizer == "scipy":
-            self.fit_gpytorch_mll_custom_scipy(
+            self.fit_scipy(
                 maxiter=maxiter,
                 loss_history=loss_history,
                 node_output_size_normalization=node_output_size_normalization,
             )
         elif optimizer == "torch":
-            self.fit_gpytorch_mll_custom_torch(
+            self.fit_torch(
                 lr=lr,
                 maxiter=maxiter,
                 loss_history=loss_history,
@@ -194,7 +178,7 @@ class POGPNPathwise(POGPNBase):
         else:
             raise ValueError(f"Invalid optimizer: {optimizer}")
 
-    def fit_gpytorch_mll_custom_scipy(
+    def fit_scipy(
         self,
         maxiter: Optional[int] = None,
         loss_history: Optional[List[float]] = None,
@@ -211,7 +195,7 @@ class POGPNPathwise(POGPNBase):
         ).to(self.device, self.dtype)
         fit_custom_scipy(mll, loss_history, maxiter=maxiter)
 
-    def fit_gpytorch_mll_custom_torch(
+    def fit_torch(
         self,
         lr: float = 1e-2,
         maxiter: Optional[int] = None,
@@ -225,3 +209,55 @@ class POGPNPathwise(POGPNBase):
             node_output_size_normalization=node_output_size_normalization,
         ).to(self.device, self.dtype)
         fit_custom_torch(mll, loss_history, lr=lr, maxiter=maxiter)
+
+    def fit_torch_with_cd(
+        self,
+        lr: float = 1e-2,
+        maxiter: Optional[int] = None,
+        loss_history: Optional[List[float]] = None,
+        node_output_size_normalization: bool = False,
+        cd_state: Optional[dict] = None,
+        stopping_criterion: Optional[Callable[[Tensor], bool]] = None,
+    ):
+        """Train the POGPNPathwise model using closure-based coordinate descent.
+
+        This reuses BoTorch's torch fit loop and heuristics, while restricting
+        each optimizer iteration to update parameters of exactly one node in a
+        deterministic topological order via the closure's backward pass.
+
+        Args:
+            lr: Learning rate for Adam.
+            maxiter: Optional step limit to pass to BoTorch's torch fitter. If
+                None, BoTorch controls step limit and early stopping.
+            loss_history: Optional list that will be appended with the (negative)
+                loss values per iteration by the shared closure.
+            node_output_size_normalization: Whether to normalize node output size
+                in the POGPNPathwiseMLL.
+            cd_state: Optional state to store the CD state.
+            stopping_criterion: Optional stopping criterion for the optimizer.
+
+        """
+        # Build the global MLL as in joint training
+        mll = POGPNPathwiseMLL(
+            likelihood=self.likelihood,
+            model=self.model,
+            node_output_size_normalization=node_output_size_normalization,
+        ).to(self.device, self.dtype)
+
+        # Deterministic topological order of trainable (non-root) nodes
+        node_order = self.dag.get_deterministic_topological_sort_subset(
+            self.non_root_nodes
+        )
+
+        cd_state: dict = cd_state if cd_state is not None else {}
+
+        fit_custom_torch(
+            mll,
+            loss_history=loss_history,
+            lr=lr,
+            maxiter=maxiter,
+            node_order=node_order,
+            cd_state=cd_state,
+            stopping_criterion=stopping_criterion,
+        )
+        return cd_state
