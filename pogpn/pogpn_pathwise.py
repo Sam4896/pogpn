@@ -21,6 +21,7 @@ from botorch.models.transforms.outcome import OutcomeTransform
 from gpytorch.likelihoods import GaussianLikelihood, MultitaskGaussianLikelihood
 from gpytorch.constraints import GreaterThan
 from botorch.models.utils.gpytorch_modules import MIN_INFERRED_NOISE_LEVEL
+from torch.optim.lr_scheduler import _LRScheduler
 
 logger = logging.getLogger("POGPN PATHWISE")
 
@@ -218,6 +219,9 @@ class POGPNPathwise(POGPNBase):
         node_output_size_normalization: bool = False,
         cd_state: Optional[dict] = None,
         stopping_criterion: Optional[Callable[[Tensor], bool]] = None,
+        lr_scheduler: Optional[
+            _LRScheduler | Callable[..., _LRScheduler] | None
+        ] = None,
     ):
         """Train the POGPNPathwise model using closure-based coordinate descent.
 
@@ -235,6 +239,7 @@ class POGPNPathwise(POGPNBase):
                 in the POGPNPathwiseMLL.
             cd_state: Optional state to store the CD state.
             stopping_criterion: Optional stopping criterion for the optimizer.
+            lr_scheduler: Optional learning rate scheduler (e.g., ReduceLROnPlateau).
 
         """
         # Build the global MLL as in joint training
@@ -259,5 +264,6 @@ class POGPNPathwise(POGPNBase):
             node_order=node_order,
             cd_state=cd_state,
             stopping_criterion=stopping_criterion,
+            lr_scheduler=lr_scheduler,
         )
         return cd_state

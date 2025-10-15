@@ -20,6 +20,7 @@ import logging
 from torch.optim import Adam, Optimizer
 
 if TYPE_CHECKING:
+    from torch.optim.lr_scheduler import _LRScheduler
     from gpytorch.mlls import MarginalLogLikelihood
 
 
@@ -67,8 +68,13 @@ def _build_forward_backward_closure(
         return [(name, p) for name, p in parameters.items() if name.startswith(block)]
 
     def forward() -> Tensor:
-        # node = current_node()
-        node = None
+        # node = (
+        #     current_node()
+        # )  # Use this for CD when you want to calculate the loss for whole POGPN
+        node = (
+            None  # Use this when you want to calculate the loss for the single CD node
+        )
+
         model_output = mll.model(*mll.model.train_inputs, coordinate_descent_node=node)
         loss = mll(
             model_output,
@@ -115,6 +121,7 @@ def fit_custom_torch(
     node_order: Optional[List[str]] = None,
     cd_state: Optional[dict] = None,
     stopping_criterion: Optional[Callable[[Tensor], bool]] = None,
+    lr_scheduler: _LRScheduler | Callable[..., _LRScheduler] | None = None,
 ):
     """Fit the GPyTorch model using the custom loss closure.
 
@@ -132,6 +139,8 @@ def fit_custom_torch(
         cd_state: Mutable dict to store rotation state across closure calls. If
             None, an internal dict is created.
         stopping_criterion: Optional stopping criterion for the optimizer.
+        lr_scheduler: Optional learning rate scheduler (e.g., ReduceLROnPlateau).
+            Passed through to BoTorch's fit_gpytorch_mll_torch.
 
     """
     if cd_state is None:
@@ -158,6 +167,9 @@ def fit_custom_torch(
 
     if stopping_criterion is not None:
         optimizer_kwargs["stopping_criterion"] = stopping_criterion
+
+    if lr_scheduler is not None:
+        optimizer_kwargs["scheduler"] = lr_scheduler
 
     fit_gpytorch_mll(
         mll,
