@@ -18,6 +18,7 @@
 
 .idea/podgp-multi-stage.iml
 .idea/misc.xml
+.idea/
 
 *.lock
 
