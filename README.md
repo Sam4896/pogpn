@@ -8,6 +8,14 @@ A POGPN is a Directed Acyclic Graph (DAG) where each node represents a random va
 
 This implementation uses Variational Inference (VI) to approximate the posterior distribution, making it scalable to larger datasets.
 
+### What's new (v0.0.3 patch)
+
+- Added coordinate-descent training for the pathwise model via `POGPNPathwise.fit_torch_with_cd(...)`.
+  - Deterministically cycles through non-root nodes in topological order, updating only one node's parameters per optimizer step.
+  - Compatible with existing APIs; joint training via `fit(optimizer="torch"|"scipy")` is unchanged.
+
+
+
 ## File-by-File Detailed Explanation
 
 ### `dag.py`
@@ -107,6 +115,15 @@ If you use this software, please cite both the software and the research paper, 
   url={https://arxiv.org/abs/2502.13905}
 }
 ```
+
+### Examples
+
+- Modeling & training (Ackley, pathwise/nodewise, CD vs joint): see `examples/ackley_modeling_training.py`.
+- Simple BO loop (Ackley, qLogEI-style objective extraction using posterior samples): see `examples/ackley_bo_logei.py`.
+
+Notes:
+- You can switch fitting between whole-network joint training and coordinate-descent in `POGPNPathwise` by replacing `fit_torch_with_cd(...)` with `fit(optimizer="torch"|"scipy", ...)`.
+- The `data_dict` layout is generic; to adapt to another simulator, replace how you create the DAG and populate `"inputs"`, `"y1"`, `"y2"`, `"y3"` while keeping shapes consistent with your DAG.
 
 **Software Package (BibTeX):**
 

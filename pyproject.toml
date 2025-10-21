@@ -1,6 +1,6 @@
 [project]
 name = "pogpn"
-version = "0.0.2"
+version = "0.0.3"
 description = "Partially Observable Gaussian Process Network for multi-stage BO."
 readme = "README.md"
 license = {text = "MIT"}
