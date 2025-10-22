@@ -34,8 +34,6 @@ dependencies = [
   "pytest",
   "torch",
   "torchinfo>=1.8.0",
-  "pynml>=1.1.1",
-  "nvidia-ml-py",
 ]
 
 [project.urls]

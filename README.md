@@ -2,6 +2,14 @@
 
 This package contains the implementation of [Partially Observable Gaussian Process Networks (POGPN)](https://arxiv.org/abs/2502.13905), a flexible model for structured multi-output regression, integrated with the BoTorch library. It is particularly well-suited for Bayesian Optimization tasks where the process is multi-stage or a process network with noisy or partial intermediate, observable outputs that are causally related.
 
+## Installation
+
+POGPN is available as a PyPI package and can be installed using pip:
+
+```bash
+pip install pogpn
+```
+
 ## Overview
 
 A POGPN is a Directed Acyclic Graph (DAG) where each node represents a random variable modeled by a Gaussian Process (GP). The key idea is that the outputs of parent nodes in the graph become the inputs to their children nodes. This structure allows for modeling complex dependencies and propagating uncertainty through the network.
